@@ -217,8 +217,8 @@ Temporary Items
 
 .idea/*
 
-!.idea/codeStyles
-!.idea/runConfigurations
+.idea/codeStyles
+.idea/runConfigurations
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
