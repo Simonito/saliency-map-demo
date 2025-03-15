@@ -1,6 +1,16 @@
 <script>
+  const PNG_START = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const PNG_END = [0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+
   let files = [];
   let loading = false;
+
+  function onImageReceived(chunks) {
+      const blob = new Blob(chunks, { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+
+      files = [...files, url];
+  }
 
   async function uploadImages(event) {
     const images = event.target.files;
@@ -25,19 +35,21 @@
 
       // Stream processing
       const reader = response.body.getReader();
-      const chunks = [];
+      let chunks = [];
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        if (value) {
+          chunks.push(value);
+          const firstBytes = [...value.slice(0, 8)];
+          const lastBytes = [...value.slice(-8)];
+
+          if (JSON.stringify(lastBytes) === JSON.stringify(PNG_END)) {
+              onImageReceived(chunks);
+              chunks = [];
+          }
+        }
       }
-
-      // Combine all chunks into a single Blob
-      const blob = new Blob(chunks, { type: "image/png" });
-      const url = URL.createObjectURL(blob);
-
-      // Store the image URL in an array
-      files = [...files, url];
 
     } catch (error) {
       console.error("Error fetching stream:", error);
