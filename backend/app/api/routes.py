@@ -1,8 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
-import httpx
+import aiohttp
 import os
-import io
 
 router = APIRouter()
 
@@ -14,20 +13,36 @@ async def generate_saliency(images: list[UploadFile] = File(...)):
     """
     Upload an image and get back the generated saliency map, streamed.
     """
-    async with httpx.AsyncClient() as client:
-        files = [("image_files", (img.filename, await img.read(), img.content_type)) for img in images]
+    form_data = aiohttp.FormData()
 
-        response = await client.post(SUN_MODEL_URL + "/process", files=files)
+    for img in images:
+        form_data.add_field(
+            "image_files",
+            await img.read(),
+            filename=img.filename,
+            content_type=img.content_type
+        )
 
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Saliency model processing failed.")
+    async def stream_response():
+        async with aiohttp.ClientSession() as session:
+            async with session.post(SUN_MODEL_URL + "/process", data=form_data) as response:
 
-        async def stream_response():
-            async for chunk in response.aiter_bytes():
-                print('streaming chunk')
-                yield chunk  # Stream the response chunk by chunk
+                if response.status != 200:
+                    raise HTTPException(status_code=500, detail="Saliency model processing failed.")
 
-        return StreamingResponse(stream_response(), media_type="application/octet-stream")
+                buffer = b""
+                try:
+                    async for data, end_of_http_chunk in response.content.iter_chunks():
+                        buffer += data
+                        if end_of_http_chunk:
+                            yield buffer
+                            buffer = b""
+                except aiohttp.ClientConnectionError as e:
+                    print(f"Downstream connection closed unexpectedly | {e}")
+                except Exception as e:
+                    print(f"Exception while streaming response | {e}")
+
+    return StreamingResponse(stream_response(), media_type="application/octet-stream")
 
 
 @router.get("/hello")

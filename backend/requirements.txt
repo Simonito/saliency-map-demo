@@ -1,6 +1,6 @@
 fastapi[all]
 uvicorn[standard]
-httpx
+aiohttp
 pydantic
 python-multipart
 loguru
